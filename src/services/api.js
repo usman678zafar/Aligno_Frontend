@@ -7,7 +7,7 @@ const getAPIBaseURL = () => {
   // Production - point to your Hugging Face Space
   if (process.env.NODE_ENV === 'production') {
 
-    return 'https://usman678zafar-aligno-backend.hf.space/health';
+    return 'https://usman678zafar-aligno-backend.hf.space/';
   }
   // Local development
   return 'http://localhost:8000';
