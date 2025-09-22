@@ -1,9 +1,20 @@
-// Enhanced API service with better error handling and caching support
+// frontend/src/services/api.js
+// Enhanced API service with dynamic URL detection for Hugging Face Spaces
 import axios from "axios";
 
-// Ensure we're using the correct backend URL
-const API_BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:8000";
+// Dynamic API URL based on environment
+const getAPIBaseURL = () => {
+  // Production - point to your Hugging Face Space
+  if (process.env.NODE_ENV === 'production') {
+    return 'https://your-hf-username-aligno-backend.hf.space';
+  }
+  // Local development
+  return 'http://localhost:8000';
+};
 
+const API_BASE_URL = getAPIBaseURL();
+
+// Create axios instance with configuration
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
@@ -60,7 +71,8 @@ api.interceptors.response.use(
     }
     
     if (error.code === "ECONNABORTED") {
-      error.message = "Request timeout. The analysis is taking longer than expected.";
+      error.message = 
+        "Request timeout. The analysis is taking longer than expected.";
     }
     
     return Promise.reject(error);
@@ -111,9 +123,9 @@ export const authAPI = {
 export const uploadResume = async (file) => {
   const formData = new FormData();
   formData.append("file", file);
-
+  
   console.log("📤 Uploading file:", file.name, file.size, "bytes");
-
+  
   return await api.post("/api/upload/resume", formData, {
     headers: {
       "Content-Type": "multipart/form-data",
@@ -128,7 +140,11 @@ export const uploadResume = async (file) => {
 };
 
 // Analysis operations with caching option
-export const analyzeResume = async (resumeId, jobDescription, useCache = true) => {
+export const analyzeResume = async (
+  resumeId,
+  jobDescription,
+  useCache = true
+) => {
   console.log("🔍 Analyzing resume:", resumeId);
   return await api.post("/api/analyze", {
     resume_id: resumeId,
@@ -143,7 +159,11 @@ export const getAnalysis = async (analysisId) => {
 };
 
 // Enhanced ATS check
-export const checkATSEnhanced = async (resumeId, jobDescription, atsSystem = "general") => {
+export const checkATSEnhanced = async (
+  resumeId,
+  jobDescription,
+  atsSystem = "general"
+) => {
   return await api.post("/api/ats/check-enhanced", {
     resume_id: resumeId,
     job_description: jobDescription,
@@ -173,9 +193,28 @@ export const testConnection = async () => {
   }
 };
 
-// WebSocket connection for real-time updates
+// WebSocket connection for real-time updates with dynamic URL
 export const createWebSocketConnection = (onMessage) => {
-  const ws = new WebSocket(`ws://localhost:8000/api/ws/analysis`);
+  // Determine WebSocket URL
+  const getWebSocketURL = () => {
+    if (typeof window !== 'undefined') {
+      const hostname = window.location.hostname;
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      
+      // Hugging Face Spaces
+      if (hostname.includes('huggingface.co') || hostname.includes('hf.space')) {
+        return `${protocol}//${window.location.host}/api/ws/analysis`;
+      }
+    }
+    
+    // Local development
+    return 'ws://localhost:8000/api/ws/analysis';
+  };
+  
+  const wsUrl = getWebSocketURL();
+  console.log("🔌 Connecting to WebSocket:", wsUrl);
+  
+  const ws = new WebSocket(wsUrl);
   
   ws.onopen = () => {
     console.log("WebSocket connected");
@@ -194,7 +233,84 @@ export const createWebSocketConnection = (onMessage) => {
     console.log("WebSocket disconnected");
   };
   
+  // Add reconnection logic for production
+  ws.addEventListener('close', () => {
+    if (typeof window !== 'undefined' && 
+        (window.location.hostname.includes('huggingface.co') || 
+         window.location.hostname.includes('hf.space'))) {
+      // Attempt to reconnect after 3 seconds in production
+      setTimeout(() => {
+        console.log("Attempting to reconnect WebSocket...");
+        createWebSocketConnection(onMessage);
+      }, 3000);
+    }
+  });
+  
   return ws;
+};
+
+// Export additional utilities
+export const isProduction = () => {
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    return hostname.includes('huggingface.co') || hostname.includes('hf.space');
+  }
+  return false;
+};
+
+// Cache management utilities
+export const cacheAPI = {
+  // Clear all cached analyses
+  clearCache: async () => {
+    return await api.post("/api/cache/clear");
+  },
+  
+  // Get cache statistics
+  getStats: async () => {
+    return await api.get("/api/cache/stats");
+  },
+};
+
+// Batch operations
+export const batchAPI = {
+  // Analyze multiple resumes
+  analyzeMultiple: async (analyses) => {
+    return await api.post("/api/batch/analyze", { analyses });
+  },
+  
+  // Get multiple analyses
+  getMultipleAnalyses: async (analysisIds) => {
+    return await api.post("/api/batch/get-analyses", { ids: analysisIds });
+  },
+};
+
+// Export utilities for debugging
+export const debugAPI = {
+  // Get current configuration
+  getConfig: () => ({
+    baseURL: API_BASE_URL,
+    isProduction: isProduction(),
+    hasAuth: !!authToken,
+  }),
+  
+  // Test all endpoints
+  testEndpoints: async () => {
+    const results = {};
+    
+    try {
+      results.health = await testConnection();
+    } catch (e) {
+      results.health = { error: e.message };
+    }
+    
+    try {
+      results.root = await api.get("/");
+    } catch (e) {
+      results.root = { error: e.message };
+    }
+    
+    return results;
+  },
 };
 
 export default api;
