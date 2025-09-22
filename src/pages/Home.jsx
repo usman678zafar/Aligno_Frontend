@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import ResumeUploader from "../components/Upload/ResumeUploader";
 import JobDescInput from "../components/Upload/JobDescInput";
-import { analyzeResume } from "../services/api";
+import { analyzeResume, createWebSocketConnection } from "../services/api";
 import {
   Sparkles,
   ArrowRight,
@@ -30,28 +30,13 @@ const Home = () => {
   useEffect(() => {
     let ws = null;
     if (isAnalyzing) {
-      ws = new WebSocket("ws://localhost:8000/api/ws/analysis");
-      
-      ws.onopen = () => {
-        console.log("WebSocket connected for progress updates");
-      };
-      
-      ws.onmessage = (event) => {
-        const data = JSON.parse(event.data);
+      ws = createWebSocketConnection((data) => {
         setProgress({
           percentage: data.percentage,
           stage: data.stage,
           message: data.message,
         });
-      };
-      
-      ws.onerror = (error) => {
-        console.error("WebSocket error:", error);
-      };
-      
-      ws.onclose = () => {
-        console.log("WebSocket disconnected");
-      };
+      });
     }
     
     return () => {

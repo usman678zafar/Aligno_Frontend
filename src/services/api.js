@@ -6,8 +6,7 @@ import axios from "axios";
 const getAPIBaseURL = () => {
   // Production - point to your Hugging Face Space
   if (process.env.NODE_ENV === 'production') {
-
-    return 'https://usman678zafar-aligno-backend.hf.space/';
+    return 'https://usman678zafar-aligno-backend.hf.space';  // FIXED: Remove /health
   }
   // Local development
   return 'http://localhost:8000';
@@ -62,12 +61,9 @@ api.interceptors.response.use(
       // Token expired or invalid
       localStorage.removeItem("authToken");
       authToken = null;
-      // Optionally redirect to login
-      // window.location.href = '/login';
     }
     
     if (error.response?.status === 429) {
-      // Rate limiting
       error.message = "Too many requests. Please wait a moment and try again.";
     }
     
@@ -79,46 +75,6 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
-
-// Authentication endpoints
-export const authAPI = {
-  register: async (email, password, name) => {
-    const response = await api.post("/api/auth/register", {
-      email,
-      password,
-      name,
-    });
-    return response;
-  },
-  
-  login: async (email, password) => {
-    const response = await api.post("/api/auth/login", {
-      email,
-      password,
-    });
-    
-    // Store token
-    if (response.data.access_token) {
-      authToken = response.data.access_token;
-      localStorage.setItem("authToken", authToken);
-    }
-    
-    return response;
-  },
-  
-  logout: () => {
-    authToken = null;
-    localStorage.removeItem("authToken");
-  },
-  
-  getMe: async () => {
-    return await api.get("/api/auth/me");
-  },
-  
-  checkLimit: async () => {
-    return await api.post("/api/auth/check-limit");
-  },
-};
 
 // Resume operations
 export const uploadResume = async (file) => {
@@ -159,29 +115,6 @@ export const getAnalysis = async (analysisId) => {
   return await api.get(`/api/analysis/${analysisId}`);
 };
 
-// Enhanced ATS check
-export const checkATSEnhanced = async (
-  resumeId,
-  jobDescription,
-  atsSystem = "general"
-) => {
-  return await api.post("/api/ats/check-enhanced", {
-    resume_id: resumeId,
-    job_description: jobDescription,
-    ats_system: atsSystem,
-  });
-};
-
-export const generateInterviewQuestions = async (analysisId) => {
-  return await api.post("/api/interview/generate", { analysis_id: analysisId });
-};
-
-export const getSuggestions = async (analysisId) => {
-  return await api.post("/api/suggestions/improve", {
-    analysis_id: analysisId,
-  });
-};
-
 // Test endpoint
 export const testConnection = async () => {
   try {
@@ -198,17 +131,11 @@ export const testConnection = async () => {
 export const createWebSocketConnection = (onMessage) => {
   // Determine WebSocket URL
   const getWebSocketURL = () => {
-    if (typeof window !== 'undefined') {
-      const hostname = window.location.hostname;
+    const isProduction = process.env.NODE_ENV === 'production';
+    if (isProduction) {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      
-      // Hugging Face Spaces
-      if (hostname.includes('huggingface.co') || hostname.includes('hf.space')) {
-        return `${protocol}//${window.location.host}/api/ws/analysis`;
-      }
+      return `${protocol}//usman678zafar-aligno-backend.hf.space/api/ws/analysis`;
     }
-    
-    // Local development
     return 'ws://localhost:8000/api/ws/analysis';
   };
   
@@ -234,84 +161,7 @@ export const createWebSocketConnection = (onMessage) => {
     console.log("WebSocket disconnected");
   };
   
-  // Add reconnection logic for production
-  ws.addEventListener('close', () => {
-    if (typeof window !== 'undefined' && 
-        (window.location.hostname.includes('huggingface.co') || 
-         window.location.hostname.includes('hf.space'))) {
-      // Attempt to reconnect after 3 seconds in production
-      setTimeout(() => {
-        console.log("Attempting to reconnect WebSocket...");
-        createWebSocketConnection(onMessage);
-      }, 3000);
-    }
-  });
-  
   return ws;
-};
-
-// Export additional utilities
-export const isProduction = () => {
-  if (typeof window !== 'undefined') {
-    const hostname = window.location.hostname;
-    return hostname.includes('huggingface.co') || hostname.includes('hf.space');
-  }
-  return false;
-};
-
-// Cache management utilities
-export const cacheAPI = {
-  // Clear all cached analyses
-  clearCache: async () => {
-    return await api.post("/api/cache/clear");
-  },
-  
-  // Get cache statistics
-  getStats: async () => {
-    return await api.get("/api/cache/stats");
-  },
-};
-
-// Batch operations
-export const batchAPI = {
-  // Analyze multiple resumes
-  analyzeMultiple: async (analyses) => {
-    return await api.post("/api/batch/analyze", { analyses });
-  },
-  
-  // Get multiple analyses
-  getMultipleAnalyses: async (analysisIds) => {
-    return await api.post("/api/batch/get-analyses", { ids: analysisIds });
-  },
-};
-
-// Export utilities for debugging
-export const debugAPI = {
-  // Get current configuration
-  getConfig: () => ({
-    baseURL: API_BASE_URL,
-    isProduction: isProduction(),
-    hasAuth: !!authToken,
-  }),
-  
-  // Test all endpoints
-  testEndpoints: async () => {
-    const results = {};
-    
-    try {
-      results.health = await testConnection();
-    } catch (e) {
-      results.health = { error: e.message };
-    }
-    
-    try {
-      results.root = await api.get("/");
-    } catch (e) {
-      results.root = { error: e.message };
-    }
-    
-    return results;
-  },
 };
 
 export default api;
