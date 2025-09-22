@@ -6,7 +6,8 @@ import axios from "axios";
 const getAPIBaseURL = () => {
   // Production - point to your Hugging Face Space
   if (process.env.NODE_ENV === 'production') {
-    return 'https://your-hf-username-aligno-backend.hf.space';
+
+    return 'https://usman678zafar-Aligno_backend.hf.space';
   }
   // Local development
   return 'http://localhost:8000';
